@@ -111,10 +111,7 @@
 <code>
 	<h3>YAML</h3>
 	{#each polygons as points}
-		<p>
-			- points: [{#each points as point, i}
-				[{point.x}, {point.y}]{i + 1 < points.length ? ', ' : ''}{/each}]
-		</p>
+		<pre>- points: [{#each points as point, i}[{point.x}, {point.y}]{i + 1 < points.length ? ', ' : ''}{/each}]</pre>
 	{/each}
 
 	<h3>JSON</h3>
