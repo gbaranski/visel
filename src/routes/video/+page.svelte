@@ -103,7 +103,7 @@
 
 <canvas bind:this={canvas} on:mouseup={onClick} on:keypress={onKeypress} tabindex="0" width="600" height="400" ></canvas>
 {#each polygons as points}
-    <p>- points: [{#each points as point} [{point.x}, {point.y}]{/each}]</p>
+    <p>- points: [{#each points as point, i} [{point.x}, {point.y}]{i+1 < points.length ? ", " : ""}{/each}]</p>
 {/each}
 
 <style>
