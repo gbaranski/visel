@@ -1,38 +1,19 @@
-# create-svelte
+# Visel
 
-Everything you need to build a Svelte project, powered by [`create-svelte`](https://github.com/sveltejs/kit/tree/master/packages/create-svelte).
+Ever had to mark coordinates on a video for your image classification program? Visel is a web application written in Svelte that'll help you doing so.
 
-## Creating a project
+You can try the app on [visel.gbaranski.com](https://visel.gbaranski.com/).
 
-If you're seeing this, you've probably already done this step. Congrats!
+## Development
 
-```bash
-# create a new project in the current directory
-npm create svelte@latest
-
-# create a new project in my-app
-npm create svelte@latest my-app
+```
+pnpm install
+pnpm dev
 ```
 
-## Developing
+## Production
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```bash
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+Port 3000 is used by default.
 ```
-
-## Building
-
-To create a production version of your app:
-
-```bash
-npm run build
+docker-compose up
 ```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://kit.svelte.dev/docs/adapters) for your target environment.
