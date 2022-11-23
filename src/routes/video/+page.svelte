@@ -5,11 +5,12 @@
 	export let data: PageData;
 
 	let canvas: HTMLCanvasElement;
+	let ctx: CanvasRenderingContext2D;
     let image: HTMLImageElement | null = null;
 
 	onMount(() => {
 		console.log('mounted');
-		const ctx = canvas.getContext('2d')!;
+        ctx = canvas.getContext('2d')!;
         image = new Image();
 		image.addEventListener(
 			'load',
@@ -24,30 +25,44 @@
 		image.src = `/api/capture?src=${encodeURIComponent(data.src!)}`;
 	});
 
-	const clicks: { x: number; y: number }[] = [];
+	let clicks: { x: number; y: number }[] = [];
+    let polygons: { x: number; y: number }[][] = [];
 
 	const drawPolygon = () => {
-		const ctx = canvas.getContext('2d')!;
 		ctx.fillStyle = 'rgba(100,100,100,0.5)';
 		ctx.strokeStyle = '#df4b26';
 		ctx.lineWidth = 1;
 
-		ctx.beginPath();
-		ctx.moveTo(clicks[0].x, clicks[0].y);
-		for (var i = 1; i < clicks.length; i++) {
-			ctx.lineTo(clicks[i].x, clicks[i].y);
-		}
-		ctx.closePath();
-		ctx.fill();
-		ctx.stroke();
+        if(clicks.length > 1) {
+            ctx.beginPath();
+            ctx.moveTo(clicks[0].x, clicks[0].y);
+            for (var i = 1; i < clicks.length; i++) {
+                ctx.lineTo(clicks[i].x, clicks[i].y);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+        }
+        
+        polygons.forEach((points) => {
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            for (var i = 1; i < points.length; i++) {
+                ctx.lineTo(points[i].x, points[i].y);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+        });
+        
 	};
 
 	const drawPoints = () => {
-		const ctx = canvas.getContext('2d')!;
 		ctx.strokeStyle = '#df4b26';
 		ctx.lineJoin = 'round';
 		ctx.lineWidth = 5;
 
+        console.log({clicks});
 		for (var i = 0; i < clicks.length; i++) {
 			ctx.beginPath();
 			ctx.arc(clicks[i].x, clicks[i].y, 3, 0, 2 * Math.PI, false);
@@ -59,24 +74,37 @@
 	};
 
 	const redraw = () => {
-		const ctx = canvas.getContext('2d')!;
-		canvas.width = canvas.width; // Clears the canvas
+        console.log("redraw");
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 		ctx.drawImage(image!, 0, 0);
 
 		drawPolygon();
 		drawPoints();
 	};
 
-	const onMouseUp = (e: MouseEvent) => {
+	const onClick = (e: MouseEvent) => {
         clicks.push({
             x: e.offsetX,
             y: e.offsetY,
         });
         redraw();
 	};
+    
+    const onKeypress = (e: KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            polygons = [...polygons, clicks];
+            clicks = [];
+            redraw();
+        }
+    }
+
 </script>
 
-<canvas bind:this={canvas} on:mouseup={onMouseUp} width="600" height="400" ></canvas>
+<canvas bind:this={canvas} on:mouseup={onClick} on:keypress={onKeypress} tabindex="0" width="600" height="400" ></canvas>
+{#each polygons as points}
+    <p>- points: [{#each points as point} [{point.x}, {point.y}]{/each}]</p>
+{/each}
 
 <style>
 	canvas {
