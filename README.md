@@ -13,7 +13,7 @@ pnpm dev
 
 ## Production
 
-Port 3000 is used by default.
+Port 1950 is used by default.
 ```
 docker-compose up
 ```
