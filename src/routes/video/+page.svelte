@@ -1,135 +1,137 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { xlink_attr } from 'svelte/internal';
 	import type { PageData } from './$types';
+	import type { WebAnnotation } from '@recogito/annotorious';
+	import { page } from '$app/stores';
+	import { generateCode, type Polygon, parseCode } from '$lib/utils';
+	import {v4 as uuidv4} from 'uuid';
 
 	export let data: PageData;
 
-	let canvas: HTMLCanvasElement;
-	let ctx: CanvasRenderingContext2D;
-	let image: HTMLImageElement | null = null;
+	let polygons: Polygon[] = [];
+	let code: string = generateCode([]);
+	let error: string | undefined = undefined;
+	let updateAnnotations: ((polygons: Polygon[]) => void) | undefined = undefined;
+	
+	const onCodeUpdate = () => {
+		console.log("on code update");
+		try {
+			const newPolygons = parseCode(code);
+			error = undefined;
+			polygons = newPolygons;
+			if (updateAnnotations) updateAnnotations(polygons);
+		} catch (e: any) {
+			error = e.toString();
+		}
+	}
 
-	onMount(() => {
-		console.log('mounted');
-		ctx = canvas.getContext('2d')!;
-		image = new Image();
-		image.addEventListener(
-			'load',
-			() => {
-				canvas.width = image!.width;
-				canvas.height = image!.height;
-				ctx.drawImage(image!, 0, 0);
-			},
-			false
-		);
-		image.addEventListener('error', console.error);
-		image.src = `/api/capture?src=${encodeURIComponent(data.src!)}`;
+	$: [code] && onCodeUpdate();
+
+	const generateYAML = () => {
+		code = generateCode(polygons);
+	};
+
+	onMount(async () => {
+		import('@recogito/annotorious/dist/annotorious.min.css');
+		const Annotorious = await import('@recogito/annotorious');
+		const anno = Annotorious.init({
+			image: 'parking-lot',
+			drawOnSingleClick: true
+		});
+
+		updateAnnotations = (polygons: Polygon[]) => {
+			console.log("updateAnnotations()")
+			anno.clearAnnotations();
+			const annotations = polygons.map(
+				(poly): WebAnnotation => ({
+					'@context': 'http://www.w3.org/ns/anno.jsonld',
+					type: 'Annotation',
+					body: [
+						{
+							type: 'TextualBody',
+							purpose: 'tagging',
+							value: 'ParkingSpot'
+						}
+					],
+					id: uuidv4(),
+					target: {
+						source: $page.url.toString(),
+						selector: {
+							type: 'SvgSelector',
+							value: `<svg><polygon points="${poly
+								.map(({ x, y }) => `${x},${y}`)
+								.join(' ')}"></polygon></svg>`
+						}
+					}
+				})
+			);
+			for (const annotation of annotations) {
+				console.log('adding annotation', { annotation });
+				anno.addAnnotation(annotation);
+			}
+		};
+
+		const updatePolygons = () => {
+			setTimeout(() => {
+
+			const annotations: WebAnnotation[] = anno.getAnnotations();
+			console.log({annotations})
+			polygons = annotations.map((a) => {
+				const html = a.target.selector.value;
+				// take value from inside of the quotes:
+				const strPoints = html.match(/"([^']+)"/)?.pop();
+				if (!strPoints) throw new Error(`couldn't find points in ${html}`);
+				const points = strPoints.split(' ').map((xy) => {
+					const [x, y] = xy.split(',');
+					return {
+						x: parseInt(x),
+						y: parseInt(y)
+					};
+				});
+				return points;
+			});
+			}, 1000)
+		};
+		anno.on('createSelection', async function (selection: WebAnnotation) {
+			selection.body = [
+				{
+					type: 'TextualBody',
+					purpose: 'tagging',
+					value: 'ParkingSpot'
+				}
+			];
+			await anno.updateSelected(selection);
+			anno.saveSelected();
+			updatePolygons();
+		});
+		anno.on('createAnnotation', updatePolygons);
+		anno.on('updateAnnotation', updatePolygons);
+		anno.on('deleteAnnotation', updatePolygons);
+		anno.setDrawingTool('polygon');
 	});
 
-	let clicks: { x: number; y: number }[] = [];
-	let polygons: { x: number; y: number }[][] = [];
-
-	const drawPolygon = () => {
-		ctx.fillStyle = 'rgba(100,100,100,0.5)';
-		ctx.strokeStyle = '#df4b26';
-		ctx.lineWidth = 1;
-
-		if (clicks.length > 1) {
-			ctx.beginPath();
-			ctx.moveTo(clicks[0].x, clicks[0].y);
-			for (var i = 1; i < clicks.length; i++) {
-				ctx.lineTo(clicks[i].x, clicks[i].y);
-			}
-			ctx.closePath();
-			ctx.fill();
-			ctx.stroke();
-		}
-
-		polygons.forEach((points) => {
-			ctx.beginPath();
-			ctx.moveTo(points[0].x, points[0].y);
-			for (var i = 1; i < points.length; i++) {
-				ctx.lineTo(points[i].x, points[i].y);
-			}
-			ctx.closePath();
-			ctx.fill();
-			ctx.stroke();
-		});
-	};
-
-	const drawPoints = () => {
-		ctx.strokeStyle = '#df4b26';
-		ctx.lineJoin = 'round';
-		ctx.lineWidth = 5;
-
-		console.log({ clicks });
-		for (var i = 0; i < clicks.length; i++) {
-			ctx.beginPath();
-			ctx.arc(clicks[i].x, clicks[i].y, 3, 0, 2 * Math.PI, false);
-			ctx.fillStyle = '#ffffff';
-			ctx.fill();
-			ctx.lineWidth = 5;
-			ctx.stroke();
-		}
-	};
-
-	const redraw = () => {
-		console.log('redraw');
-
-		ctx.clearRect(0, 0, canvas.width, canvas.height);
-		ctx.drawImage(image!, 0, 0);
-
-		drawPolygon();
-		drawPoints();
-	};
-
-	const onClick = (e: MouseEvent) => {
-		clicks.push({
-			x: e.offsetX,
-			y: e.offsetY
-		});
-		redraw();
-	};
-
-	const onKeypress = (e: KeyboardEvent) => {
-		if (e.key === 'Enter') {
-			polygons = [...polygons, clicks];
-			clicks = [];
-			redraw();
-		}
-	};
+	const imgSrc = `/api/capture?src=${encodeURIComponent(data.src!)}`;
 </script>
 
-<canvas
-	bind:this={canvas}
-	on:mouseup={onClick}
-	on:keypress={onKeypress}
-	tabindex="0"
-	width="600"
-	height="400"
-/>
-<code>
-	<h3>YAML</h3>
-	{#each polygons as points}
-		<pre>- points: [{#each points as point, i}[{point.x}, {point.y}]{i + 1 < points.length ? ', ' : ''}{/each}]</pre>
-	{/each}
+<img id="parking-lot" src={imgSrc} alt="parking lot" />
 
-	<h3>JSON</h3>
-	{JSON.stringify(
-		{
-			polygons: polygons.map((points) => ({
-				points: points.map((point) => [point.x, point.y])
-			}))
-		},
-		null,
-		'\t'
-	)}
-</code>
+{#if error}
+	<span style="color: red;">{error}</span>
+{/if}
+<button on:click={generateYAML}>Generate YAML</button>
+<textarea placeholder="YAML code" bind:value={code} id="raw" />
 
 <style>
-	canvas {
+	#parking-lot {
 		background: #fff;
 		display: block;
 		margin: 20px auto;
+		/* zoom: 2; */
+	}
+
+	#raw {
+		font-family: monospace;
+		width: 100%;
+		height: 300px;
 	}
 </style>
